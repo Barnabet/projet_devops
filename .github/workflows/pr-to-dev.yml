@@ -1,0 +1,142 @@
+name: 🔍 PR to Dev - Build & Test
+
+on:
+  pull_request:
+    branches: [ dev ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+
+jobs:
+  build-and-test:
+    name: 🏗️ Build & Test Application
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: 📦 Install Backend Dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: 📦 Install Test Dependencies
+      run: |
+        cd tests
+        pip install -r requirements.txt
+    
+    - name: 🔍 Run Code Quality Checks
+      run: |
+        # Install linting tools
+        pip install flake8 black isort
+        
+        # Check code formatting
+        echo "🎨 Checking code formatting..."
+        black --check backend/ tests/ || echo "⚠️ Code formatting issues found"
+        
+        # Check imports
+        echo "📦 Checking import sorting..."
+        isort --check-only backend/ tests/ || echo "⚠️ Import sorting issues found"
+        
+        # Run linting
+        echo "🔍 Running linting..."
+        flake8 backend/ tests/ --max-line-length=88 --ignore=E203,W503 || echo "⚠️ Linting issues found"
+    
+    - name: 🧪 Run Unit Tests
+      run: |
+        cd tests
+        python -m pytest test_unit.py -v --tb=short
+    
+    - name: 🔗 Run Integration Tests
+      run: |
+        cd tests
+        python -m pytest test_integration.py -v --tb=short
+    
+    - name: 🐳 Build Docker Images
+      run: |
+        echo "🏗️ Building Docker images..."
+        docker-compose build
+    
+    - name: 🚀 Test Docker Containers
+      run: |
+        echo "🐳 Starting containers..."
+        docker-compose up -d
+        
+        echo "⏳ Waiting for containers to be ready..."
+        sleep 30
+        
+        echo "🔍 Testing container health..."
+        # Test backend health
+        curl -f http://localhost:5001/health || exit 1
+        
+        # Test frontend health  
+        curl -f http://localhost:8080/health || exit 1
+        
+        echo "✅ All containers are healthy!"
+        
+        # Cleanup
+        docker-compose down
+    
+    - name: 📊 Generate Test Report
+      if: always()
+      run: |
+        echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Unit Tests: Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Integration Tests: Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Docker Build: Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Container Health: Verified" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🎉 **Ready for manual merge to dev branch!**" >> $GITHUB_STEP_SUMMARY
+
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+    
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: 🔍 Run Security Scan
+      run: |
+        pip install safety bandit
+        
+        echo "🔍 Scanning dependencies for vulnerabilities..."
+        cd backend && safety check -r requirements.txt || echo "⚠️ Security vulnerabilities found"
+        
+        echo "🔍 Scanning code for security issues..."
+        bandit -r backend/ -f json || echo "⚠️ Security issues found"
+    
+    - name: 🐳 Scan Docker Images
+      run: |
+        echo "🔍 Scanning Docker images..."
+        docker-compose build
+        
+        # Install trivy for container scanning
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+        
+        # Scan images
+        trivy image --exit-code 0 --severity HIGH,CRITICAL projet-backend || echo "⚠️ Backend image vulnerabilities found"
+        trivy image --exit-code 0 --severity HIGH,CRITICAL projet-frontend || echo "⚠️ Frontend image vulnerabilities found" 

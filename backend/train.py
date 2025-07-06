@@ -7,15 +7,16 @@ import mlflow.sklearn
 import dagshub
 import dvc.api
 import os
+import json
 
 # Initialize DagsHub integration with MLflow
 dagshub.init(repo_owner='barnabet', repo_name='projet_devops', mlflow=True)
 
 print("Loading data...")
-# Load data using the DVC API
+# Load data using the local DVC setup.
+# Make sure to run `dvc pull` if you don't have the data locally.
 with dvc.api.open(
-    'data/diamonds.csv',
-    repo='https://github.com/Barnabet/projet_devops.git'
+    'data/diamonds.csv'
 ) as fd:
     df = pd.read_csv(fd)
 
@@ -27,11 +28,15 @@ df = pd.get_dummies(df, columns=['cut', 'color', 'clarity'], drop_first=True)
 X = df.drop('price', axis=1)
 y = df['price']
 
+# Save training columns for inference
+with open("training_columns.json", "w") as f:
+    json.dump(X.columns.tolist(), f)
+
 # Split data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Start an MLflow run
-with mlflow.start_run():
+with mlflow.start_run(nested=True):
     print("Training model...")
     # Log parameters
     n_estimators = 100
@@ -51,10 +56,33 @@ with mlflow.start_run():
     mlflow.log_metric("rmse", rmse)
     print(f"Logged RMSE: {rmse}")
 
-    # Log the model and register it
+    # Log the training columns as an artifact
+    mlflow.log_artifact("training_columns.json", "model_meta")
+
+    # Log the model with a registered name
+    MODEL_NAME = "diamond-price-regressor"
     mlflow.sklearn.log_model(
         sk_model=model,
         artifact_path="diamond-price-model",
-        registered_model_name="diamond-price-regressor"
+        registered_model_name=MODEL_NAME
     )
-    print("Model logged and registered in MLflow on DagsHub.") 
+    
+    # Find the latest version of the model
+    client = mlflow.tracking.MlflowClient()
+    latest_versions = client.get_latest_versions(name=MODEL_NAME, stages=["None"])
+    if not latest_versions:
+        raise Exception(f"No versions found for model '{MODEL_NAME}' in stage 'None'.")
+    
+    new_version = latest_versions[0].version
+
+    print(f"Found latest version '{new_version}' for model '{MODEL_NAME}'.")
+
+    # Transition the new version to the Production stage
+    print("Transitioning new model version to Production stage...")
+    client.transition_model_version_stage(
+        name=MODEL_NAME,
+        version=new_version,
+        stage="Production",
+        archive_existing_versions=True
+    )
+    print("Model version successfully transitioned to Production.") 

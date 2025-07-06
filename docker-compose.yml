@@ -1,0 +1,57 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: diamond-backend
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=production
+      - PORT=5000
+      - PYTHONUNBUFFERED=1
+      # MLflow/DagsHub credentials (set these in .env file)
+      - MLFLOW_TRACKING_USERNAME=${MLFLOW_TRACKING_USERNAME:-}
+      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_TRACKING_PASSWORD:-}
+      - DAGSHUB_USER_TOKEN=${DAGSHUB_USER_TOKEN:-}
+    # volumes:
+      # Note: Data and DVC config are copied during build instead of mounted
+      # to avoid path issues with spaces and special characters
+    networks:
+      - diamond-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diamond-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - diamond-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  diamond-network:
+    driver: bridge
+    name: diamond-network
+
+volumes:
+  # Volume for persistent data if needed
+  diamond-data:
+    name: diamond-data 
