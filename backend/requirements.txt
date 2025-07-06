@@ -29,6 +29,7 @@ pydantic>=1.8.0
 pydantic-core
 typing-extensions
 annotated-types
+typing-inspect
 entrypoints
 querystring-parser
 databricks-cli
