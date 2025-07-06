@@ -26,6 +26,9 @@ importlib-metadata
 
 # Additional MLflow dependencies that are often missing
 pydantic>=1.8.0
+pydantic-core
+typing-extensions
+annotated-types
 entrypoints
 querystring-parser
 databricks-cli
