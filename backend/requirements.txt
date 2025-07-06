@@ -6,4 +6,6 @@ mlflow
 dagshub
 dvc[s3]
 python-dotenv
-gunicorn 
+gunicorn
+protobuf>=3.19.0
+grpcio 
