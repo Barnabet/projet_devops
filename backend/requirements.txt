@@ -9,7 +9,7 @@ pandas
 scikit-learn
 numpy
 
-# MLflow and related dependencies
+# MLflow and ALL its dependencies
 mlflow
 protobuf>=3.19.0
 grpcio
@@ -18,6 +18,26 @@ pyarrow
 cloudpickle
 sqlalchemy
 alembic
+pyyaml
+requests
+click
+gitpython
+importlib-metadata
+
+# Additional MLflow dependencies that are often missing
+pydantic>=1.8.0
+entrypoints
+querystring-parser
+databricks-cli
+docker
+matplotlib
+plotly
+jinja2
+markdown
+tabulate
+pytz
+werkzeug
+scipy
 
 # DagsHub integration
 dagshub
@@ -25,9 +45,6 @@ dagshub
 # Data versioning
 dvc[s3]
 
-# Additional MLflow dependencies that might be missing
-pyyaml
-requests
-click
-gitpython
-importlib-metadata 
+# AWS/S3 dependencies
+boto3
+botocore 
