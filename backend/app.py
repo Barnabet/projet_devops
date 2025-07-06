@@ -23,8 +23,20 @@ def load_model():
     global model, training_columns
     
     try:
-        print("Initializing DagsHub...")
-        dagshub.init(repo_owner=DAGSHUB_REPO_OWNER, repo_name=DAGSHUB_REPO_NAME, mlflow=True)
+        print("🔄 Initializing DagsHub...")
+        
+        # Set MLflow authentication from environment variables
+        dagshub_username = os.environ.get('DAGSHUB_USERNAME')
+        dagshub_token = os.environ.get('DAGSHUB_TOKEN')
+        
+        if dagshub_username and dagshub_token:
+            print(f"🔐 Using DagsHub credentials for user: {dagshub_username}")
+            os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_username
+            os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
+            mlflow.set_tracking_uri("https://dagshub.com/Barnabet/projet_devops.mlflow")
+        else:
+            print("⚠️ No DagsHub credentials found, trying default initialization...")
+            dagshub.init(repo_owner=DAGSHUB_REPO_OWNER, repo_name=DAGSHUB_REPO_NAME, mlflow=True)
         
         client = mlflow.tracking.MlflowClient()
         
@@ -110,18 +122,33 @@ def predict():
 def health():
     """Health check endpoint."""
     model_status = "loaded" if model is not None else "not loaded"
+    training_columns_status = "loaded" if training_columns is not None else "not loaded"
+    
+    # Always return 200 OK for health check - service is running
     return jsonify({
-        "status": "running",
+        "status": "healthy",
+        "service": "running",
         "model_status": model_status,
-        "message": "Diamond Price Prediction API is running"
-    })
+        "training_columns_status": training_columns_status,
+        "message": "Diamond Price Prediction API is healthy",
+        "ready_for_predictions": model is not None and training_columns is not None
+    }), 200
 
 if __name__ == '__main__':
-    load_model()
-    print("Starting Flask server...")
-    print("Backend API available at: http://127.0.0.1:5000")
-    print("Health check: http://127.0.0.1:5000/health")
-    print("Prediction endpoint: http://127.0.0.1:5000/predict")
+    print("🚀 Starting Flask server...")
+    print("🌐 Backend API will be available at: http://127.0.0.1:5000")
+    print("❤️ Health check: http://127.0.0.1:5000/health")
+    print("🔮 Prediction endpoint: http://127.0.0.1:5000/predict")
+    
+    # Load model in background to not block server startup
+    import threading
+    model_thread = threading.Thread(target=load_model)
+    model_thread.daemon = True
+    model_thread.start()
+    
+    print("📦 Model loading started in background...")
+    print("✅ Server is ready to accept requests!")
+    
     # To run locally: flask run
     # For production, use a Gunicorn server
-    app.run(host='0.0.0.0', port=os.getenv("PORT", 5000), debug=True) 
+    app.run(host='0.0.0.0', port=os.getenv("PORT", 5000), debug=False) 
