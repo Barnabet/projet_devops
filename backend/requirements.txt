@@ -1,0 +1,8 @@
+flask
+pandas
+scikit-learn
+mlflow
+dagshub
+dvc[s3]
+python-dotenv
+gunicorn 

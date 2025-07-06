@@ -1,0 +1,4 @@
+# DVC
+.dvc/config
+.dvc/tmp
+.dvc/cache 
