@@ -17,11 +17,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY backend/requirements.txt .
+COPY backend/requirements-pinned.txt backend/requirements.txt ./
 
-# Install Python dependencies with optimizations
+# Install Python dependencies with optimizations (use pinned versions to avoid backtracking)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --no-deps -r requirements.txt || \
+    pip install --no-cache-dir --no-deps -r requirements-pinned.txt || \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
