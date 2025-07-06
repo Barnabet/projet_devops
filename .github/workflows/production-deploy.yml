@@ -39,8 +39,21 @@ jobs:
         pip install -r requirements.txt
     
     - name: 🤖 Fetch Latest Model from MLflow
+      env:
+        DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
         echo "🔍 Fetching latest model from DagsHub MLflow..."
+        
+        # Verify environment variables are set
+        if [ -z "$DAGSHUB_USERNAME" ] || [ -z "$DAGSHUB_TOKEN" ]; then
+          echo "❌ Error: DAGSHUB_USERNAME and DAGSHUB_TOKEN must be set as GitHub secrets"
+          exit 1
+        fi
+        
+        echo "✅ DagsHub credentials found"
         
         # Create model fetching script
         cat > fetch_model.py << 'EOF'
@@ -49,11 +62,23 @@ jobs:
         import dagshub
         from pathlib import Path
         
-        # Initialize DagsHub
-        dagshub.init(repo_owner="Barnabet", repo_name="projet_devops", mlflow=True)
+        # Set DagsHub credentials from environment variables
+        dagshub_username = os.environ.get('DAGSHUB_USERNAME')
+        dagshub_token = os.environ.get('DAGSHUB_TOKEN')
         
-        # Set MLflow tracking URI
+        if not dagshub_username or not dagshub_token:
+            raise ValueError("DAGSHUB_USERNAME and DAGSHUB_TOKEN environment variables must be set")
+        
+        print(f"🔐 Authenticating with DagsHub as user: {dagshub_username}")
+        
+        # Set MLflow environment variables for authentication (bypasses OAuth)
+        os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_username
+        os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
+        
+        # Set MLflow tracking URI (without credentials in URL to avoid double auth)
         mlflow.set_tracking_uri("https://dagshub.com/Barnabet/projet_devops.mlflow")
+        
+        print("✅ DagsHub authentication configured")
         
         try:
             # Get the latest model version in Production stage
