@@ -42,6 +42,14 @@ jobs:
       run: |
         echo "🔍 Fetching latest model from DagsHub MLflow..."
         
+        # Check if credentials are available
+        if [ -z "${{ env.DAGSHUB_USERNAME }}" ] || [ -z "${{ env.DAGSHUB_TOKEN }}" ]; then
+          echo "⚠️ DagsHub credentials not found. Creating fallback model info..."
+          echo '{"status": "no_credentials", "message": "DagsHub credentials not configured"}' > model_info.json
+          echo "🚀 Continuing deployment without model fetch..."
+          exit 0
+        fi
+        
         # Create model fetching script
         cat > fetch_model.py << 'EOF'
         import os
