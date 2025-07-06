@@ -12,10 +12,10 @@ import os
 dagshub.init(repo_owner='barnabet', repo_name='projet_devops', mlflow=True)
 
 print("Loading data...")
-# Load data using the DVC API
+# Load data using the local DVC setup.
+# Make sure to run `dvc pull` if you don't have the data locally.
 with dvc.api.open(
-    'data/diamonds.csv',
-    repo='https://github.com/Barnabet/projet_devops.git'
+    'data/diamonds.csv'
 ) as fd:
     df = pd.read_csv(fd)
 
