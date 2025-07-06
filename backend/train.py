@@ -7,6 +7,7 @@ import mlflow.sklearn
 import dagshub
 import dvc.api
 import os
+import json
 
 # Initialize DagsHub integration with MLflow
 dagshub.init(repo_owner='barnabet', repo_name='projet_devops', mlflow=True)
@@ -26,6 +27,10 @@ df = pd.get_dummies(df, columns=['cut', 'color', 'clarity'], drop_first=True)
 # Define features and target
 X = df.drop('price', axis=1)
 y = df['price']
+
+# Save training columns for inference
+with open("training_columns.json", "w") as f:
+    json.dump(X.columns.tolist(), f)
 
 # Split data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -50,6 +55,9 @@ with mlflow.start_run():
     rmse = mean_squared_error(y_test, predictions, squared=False)
     mlflow.log_metric("rmse", rmse)
     print(f"Logged RMSE: {rmse}")
+
+    # Log the training columns as an artifact
+    mlflow.log_artifact("training_columns.json", "model_meta")
 
     # Log the model and register it
     mlflow.sklearn.log_model(
