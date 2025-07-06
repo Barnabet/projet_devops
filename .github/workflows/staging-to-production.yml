@@ -7,6 +7,11 @@ on:
       - '**.md'
       - 'docs/**'
 
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
 env:
   PYTHON_VERSION: '3.9'
 
@@ -118,6 +123,7 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
     
     - name: 🚀 Push to Production Branch (main)
       run: |
