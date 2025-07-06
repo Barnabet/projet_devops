@@ -39,16 +39,14 @@ jobs:
         pip install -r requirements.txt
     
     - name: 🤖 Fetch Latest Model from MLflow
+      env:
+        DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
         echo "🔍 Fetching latest model from DagsHub MLflow..."
-        
-        # Check if credentials are available
-        if [ -z "${{ env.DAGSHUB_USERNAME }}" ] || [ -z "${{ env.DAGSHUB_TOKEN }}" ]; then
-          echo "⚠️ DagsHub credentials not found. Creating fallback model info..."
-          echo '{"status": "no_credentials", "message": "DagsHub credentials not configured"}' > model_info.json
-          echo "🚀 Continuing deployment without model fetch..."
-          exit 0
-        fi
+        echo "Using DagsHub user: $DAGSHUB_USERNAME"
         
         # Create model fetching script
         cat > fetch_model.py << 'EOF'
@@ -57,11 +55,26 @@ jobs:
         import dagshub
         from pathlib import Path
         
+        # Set environment variables for authentication
+        os.environ['MLFLOW_TRACKING_USERNAME'] = os.getenv('DAGSHUB_USERNAME', '')
+        os.environ['MLFLOW_TRACKING_PASSWORD'] = os.getenv('DAGSHUB_TOKEN', '')
+        
+        print(f"Authenticating with DagsHub user: {os.getenv('DAGSHUB_USERNAME', 'NOT_SET')}")
+        
         # Initialize DagsHub
         dagshub.init(repo_owner="Barnabet", repo_name="projet_devops", mlflow=True)
         
-        # Set MLflow tracking URI
-        mlflow.set_tracking_uri("https://dagshub.com/Barnabet/projet_devops.mlflow")
+        # Set MLflow tracking URI with authentication
+        dagshub_username = os.getenv('DAGSHUB_USERNAME', '')
+        dagshub_token = os.getenv('DAGSHUB_TOKEN', '')
+        
+        if dagshub_username and dagshub_token:
+            tracking_uri = f"https://{dagshub_username}:{dagshub_token}@dagshub.com/Barnabet/projet_devops.mlflow"
+        else:
+            tracking_uri = "https://dagshub.com/Barnabet/projet_devops.mlflow"
+        
+        mlflow.set_tracking_uri(tracking_uri)
+        print(f"MLflow tracking URI set to: https://dagshub.com/Barnabet/projet_devops.mlflow")
         
         try:
             # Get the latest model version in Production stage
@@ -153,8 +166,10 @@ jobs:
         
         # Test images locally
         docker run -d --name test-backend -p 5001:5000 \
-          -e DAGSHUB_USERNAME=${{ env.DAGSHUB_USERNAME }} \
-          -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
+          -e DAGSHUB_USERNAME=${{ secrets.DAGSHUB_USERNAME }} \
+          -e DAGSHUB_TOKEN=${{ secrets.DAGSHUB_TOKEN }} \
+          -e MLFLOW_TRACKING_USERNAME=${{ secrets.DAGSHUB_USERNAME }} \
+          -e MLFLOW_TRACKING_PASSWORD=${{ secrets.DAGSHUB_TOKEN }} \
           ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
         
         docker run -d --name test-frontend -p 8080:80 \
