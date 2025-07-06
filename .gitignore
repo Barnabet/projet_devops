@@ -1,4 +1,7 @@
 # DVC
 .dvc/config
 .dvc/tmp
-.dvc/cache 
+.dvc/cache
+
+# Build artifacts
+training_columns.json 
