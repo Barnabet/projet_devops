@@ -143,7 +143,7 @@
             const resultDiv = document.getElementById('result');
             
             try {
-                const response = await axios.post('http://127.0.0.1:5001/predict', [data]);
+                const response = await axios.post('http://127.0.0.1:5000/predict', [data]);
                 const prediction = response.data.predicted_price[0];
                 
                 resultDiv.innerHTML = `
