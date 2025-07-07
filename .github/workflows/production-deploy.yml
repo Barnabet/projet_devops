@@ -13,6 +13,7 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
   DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
   DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
 
@@ -278,8 +279,8 @@ jobs:
         
         # The CLI will automatically use the RAILWAY_TOKEN from the environment
         
-        # Deploy using Railway
-        railway up --detach
+        # Deploy using Railway, specifying the project ID
+        railway up --detach --project ${{ env.RAILWAY_PROJECT_ID }}
         
         echo "✅ Deployed to Railway successfully!"
     
