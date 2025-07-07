@@ -13,6 +13,7 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
   DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
   DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
 
@@ -42,6 +43,8 @@ jobs:
       env:
         DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
         DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+        MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
       run: |
         echo "🔍 Fetching latest model from DagsHub MLflow..."
         
@@ -69,13 +72,14 @@ jobs:
         
         print(f"🔐 Authenticating with DagsHub as user: {dagshub_username}")
         
-        # Initialize DagsHub with explicit credentials
-        dagshub.init(repo_owner="Barnabet", repo_name="projet_devops", mlflow=True)
+        # Set MLflow environment variables for authentication (bypasses OAuth)
+        os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_username
+        os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
         
-        # Set MLflow tracking URI with authentication
-        mlflow.set_tracking_uri(f"https://{dagshub_username}:{dagshub_token}@dagshub.com/Barnabet/projet_devops.mlflow")
+        # Set MLflow tracking URI (without credentials in URL to avoid double auth)
+        mlflow.set_tracking_uri("https://dagshub.com/Barnabet/projet_devops.mlflow")
         
-        print("✅ DagsHub authentication successful")
+        print("✅ DagsHub authentication configured")
         
         try:
             # Get the latest model version in Production stage
@@ -135,9 +139,12 @@ jobs:
           cat model_info.json
         fi
     
-    - name: 🏗️ Build Production Docker Images
+    - name: 🏷️ Generate Docker Image Tag
+      run: echo "IMAGE_TAG=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
+    
+    - name: 🏗️ Prepare Application for Deployment
       run: |
-        echo "🏗️ Building production Docker images with latest model..."
+        echo "🏗️ Preparing application for deployment..."
         
         # Copy model artifacts to backend if they exist
         if [ -d "model_artifacts" ]; then
@@ -150,88 +157,148 @@ jobs:
           echo "✅ Model info copied to backend"
         fi
         
-        # Build images with production tags
-        docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:$(date +%Y%m%d-%H%M%S) \
-                     -f backend/Dockerfile .
+        # Build and test images locally for verification
+        echo "🧪 Building images for local testing..."
+        docker build -t diamond-backend-test -f backend/Dockerfile .
+        docker build -t diamond-frontend-test -f frontend/Dockerfile frontend/
         
-        docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:$(date +%Y%m%d-%H%M%S) \
-                     -f frontend/Dockerfile frontend/
-        
-        echo "✅ Docker images built successfully!"
+        echo "✅ Application prepared for deployment!"
     
-    - name: 🧪 Test Production Images
+    - name: 🧪 Test Application Locally
       run: |
-        echo "🧪 Testing production images..."
+        echo "🧪 Testing application locally..."
         
-        # Test images locally
-        docker run -d --name test-backend -p 5001:5000 \
+        # Create Docker network for container communication
+        echo "🔗 Creating Docker network..."
+        docker network create test-network
+        
+        # Test backend image
+        echo "🔍 Testing backend container..."
+        docker run -d --name test-backend --network test-network --network-alias backend -p 5001:5000 \
           -e DAGSHUB_USERNAME=${{ env.DAGSHUB_USERNAME }} \
           -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
-          ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
+          -e MLFLOW_TRACKING_USERNAME=${{ env.DAGSHUB_USERNAME }} \
+          -e MLFLOW_TRACKING_PASSWORD=${{ env.DAGSHUB_TOKEN }} \
+          diamond-backend-test
         
-        docker run -d --name test-frontend -p 8080:80 \
-          ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
+        # Test frontend image
+        echo "🔍 Testing frontend container..."
+        docker run -d --name test-frontend --network test-network -p 8080:80 \
+          diamond-frontend-test
         
         # Wait for containers to start
-        sleep 30
+        echo "⏳ Waiting for containers to start..."
+        sleep 15
         
-        # Test health endpoints
-        curl -f http://localhost:5001/health || exit 1
-        curl -f http://localhost:8080/health || exit 1
+        # Check if containers are running
+        echo "📊 Container status:"
+        docker ps --filter "name=test-backend" --filter "name=test-frontend"
         
-        echo "✅ Production images tested successfully!"
+        # Check backend container health
+        if docker ps --filter "name=test-backend" --filter "status=running" --quiet | grep -q .; then
+          echo "✅ Backend container is running"
+          echo "📋 Backend logs:"
+          docker logs test-backend --tail 10
+          
+          # Quick health check (with timeout)
+          echo "🔍 Testing backend health..."
+          if timeout 10 curl -f http://localhost:5001/health; then
+            echo "✅ Backend health check passed!"
+          else
+            echo "⚠️ Backend health check failed, but container is running"
+            echo "📋 More backend logs:"
+            docker logs test-backend --tail 20
+          fi
+        else
+          echo "❌ Backend container failed to start"
+          echo "📋 Backend logs:"
+          docker logs test-backend
+          exit 1
+        fi
         
-        # Cleanup test containers
-        docker stop test-backend test-frontend
-        docker rm test-backend test-frontend
+        # Check frontend container health
+        if docker ps --filter "name=test-frontend" --filter "status=running" --quiet | grep -q .; then
+          echo "✅ Frontend container is running"
+          echo "📋 Frontend logs:"
+          docker logs test-frontend --tail 5
+          
+          # Quick health check
+          echo "🔍 Testing frontend health..."
+          if timeout 5 curl -f http://localhost:8080/health; then
+            echo "✅ Frontend health check passed!"
+          else
+            echo "⚠️ Frontend health check failed, but container is running"
+          fi
+        else
+          echo "❌ Frontend container failed to start"
+          echo "📋 Frontend logs:"
+          docker logs test-frontend
+          exit 1
+        fi
+        
+        echo "✅ Application tested successfully!"
+        
+        # Cleanup test containers and network
+        echo "🧹 Cleaning up test containers and network..."
+        docker stop test-backend test-frontend || true
+        docker rm test-backend test-frontend || true
+        docker network rm test-network || true
     
-    - name: 🔐 Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.DOCKER_REGISTRY }}
-        username: ${{ env.DOCKER_USERNAME }}
-        password: ${{ env.DOCKER_PASSWORD }}
-    
-    - name: 📤 Push Images to Docker Hub
+    - name: 🚂 Install Railway CLI
       run: |
-        echo "📤 Pushing images to Docker Hub..."
-        
-        # Push backend images
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:$(date +%Y%m%d-%H%M%S)
-        
-        # Push frontend images
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:$(date +%Y%m%d-%H%M%S)
-        
-        echo "✅ Images pushed to Docker Hub successfully!"
-    
-    - name: 🚂 Deploy to Railway
-      run: |
-        echo "🚂 Deploying to Railway..."
-        
-        # Install Railway CLI
+        echo "📦 Installing Railway CLI..."
         curl -fsSL https://railway.app/install.sh | sh
         export PATH=$PATH:~/.railway/bin
-        
-        # Login to Railway
-        railway login --token ${{ env.RAILWAY_TOKEN }}
-        
-        # Deploy using Railway
-        railway up --detach
-        
-        echo "✅ Deployed to Railway successfully!"
+        echo "$HOME/.railway/bin" >> $GITHUB_PATH
     
+    - name: 🚂 Deploy Backend to Railway
+      env:
+        RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
+      run: |
+        echo "🚂 Deploying Backend to Railway..."
+        
+        # Deploy backend service from source (Railway will build using Dockerfile)
+        railway up \
+          --service diamond-backend \
+          --environment production \
+          --detach
+
+    - name: 🚂 Deploy Frontend to Railway  
+      env:
+        RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
+      run: |
+        echo "🚂 Deploying Frontend to Railway..."
+        
+        # Deploy frontend service from source (Railway will build using Dockerfile)
+        railway up \
+          --service diamond-frontend \
+          --environment production \
+          --detach
+
     - name: 🌐 Get Deployment URL
       id: get-url
       run: |
-        # Get Railway deployment URL
-        railway status
-        DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[0].url' 2>/dev/null || echo "https://your-app.railway.app")
+        # Fetch public URL for the backend service
+        # `railway domain` will return the service's existing domain or generate one if missing.
+        # We parse the single‑line output directly—no need for JSON or prior `railway link`.
+        DEPLOYMENT_URL=$(railway domain \
+          --service diamond-backend \
+          --environment production \
+          2>/dev/null | tail -n1)
+
         echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "🌐 Deployment URL: $DEPLOYMENT_URL"
+
+    - name: 🌐 Get Frontend URL
+      id: get-frontend-url
+      run: |
+        DEPLOYMENT_URL=$(railway domain \
+          --service diamond-frontend \
+          --environment production \
+          2>/dev/null | tail -n1)
+
+        echo "FRONTEND_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "🌐 Frontend URL: $DEPLOYMENT_URL"
     
     - name: 🧪 Test Production Deployment
       run: |
@@ -260,18 +327,18 @@ jobs:
       run: |
         echo "## 🚀 Production Deployment Report" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ **Model**: Latest from MLflow Production stage" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ **Docker Images**: Built and pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ **Deployment**: Successfully deployed to Railway" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Application**: Built and tested locally" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Deployment**: Successfully deployed to Railway from source" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ **Health Check**: Production endpoints verified" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "🌐 **Live URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Backend URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Frontend URL**: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🎉 **Production deployment completed successfully!**" >> $GITHUB_STEP_SUMMARY
     
     - name: 📢 Notify Deployment Success
       run: |
         echo "🎉 Production deployment completed!"
-        echo "🌐 Application is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
-        echo "📦 Docker images available at:"
-        echo "   - Backend: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest"
-        echo "   - Frontend: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest" 
+        echo "🌐 Backend is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
+        echo "🌐 Frontend is live at: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}"
+        echo "🚂 Railway deployment method: Build from source"

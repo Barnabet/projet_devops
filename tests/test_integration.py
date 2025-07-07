@@ -39,7 +39,7 @@ class TestAPIEndpoints:
         assert 'status' in data
         assert 'model_status' in data
         assert 'message' in data
-        assert data['status'] == 'running'
+        assert data['status'] == 'healthy'
         assert data['model_status'] in ['loaded', 'not loaded']
 
     def test_predict_endpoint_with_valid_data(self, client):
@@ -207,7 +207,7 @@ class TestExternalServiceIntegration:
                 data = response.json()
                 assert 'status' in data
                 assert 'model_status' in data
-                assert data['status'] == 'running'
+                assert data['status'] == 'healthy'
             else:
                 pytest.skip("Backend not running - skipping live test")
                 
