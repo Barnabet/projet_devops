@@ -268,7 +268,7 @@ jobs:
         
         echo "✅ Images pushed to Docker Hub successfully!"
     
-    - name: �� Deploy to Railway
+    - name: 🚂 Deploy to Railway
       run: |
         echo "🚂 Deploying to Railway..."
         
@@ -276,8 +276,7 @@ jobs:
         curl -fsSL https://railway.app/install.sh | sh
         export PATH=$PATH:~/.railway/bin
         
-        # Login to Railway
-        railway login --token ${{ env.RAILWAY_TOKEN }}
+        # The CLI will automatically use the RAILWAY_TOKEN from the environment
         
         # Deploy using Railway
         railway up --detach
