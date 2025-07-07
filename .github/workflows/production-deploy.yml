@@ -101,6 +101,12 @@ jobs:
                 print(f"⬇️ Downloading model to {local_path}...")
                 mlflow.artifacts.download_artifacts(artifact_uri=model_path, dst_path=local_path)
                 
+                # Download model metadata (training columns)
+                run_id = latest_version.run_id
+                meta_path = "./model_meta"
+                print(f"⬇️ Downloading model metadata from run {run_id} to {meta_path}...")
+                client.download_artifacts(run_id, "model_meta", meta_path)
+                
                 # Create model info file
                 model_info = {
                     "model_name": model_name,
@@ -150,6 +156,11 @@ jobs:
         if [ -d "model_artifacts" ]; then
           cp -r model_artifacts backend/
           echo "✅ Model artifacts copied to backend"
+        fi
+        
+        if [ -d "model_meta" ]; then
+          cp -r model_meta backend/
+          echo "✅ Model metadata copied to backend"
         fi
         
         if [ -f "model_info.json" ]; then
@@ -281,7 +292,15 @@ jobs:
         railway up \
           --service diamond-backend \
           --environment production \
-          --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }} \
+          --detach
+
+    - name: 🚂 Deploy Frontend to Railway
+      run: |
+        echo "🚂 Deploying Frontend..."
+        # Railway CLI is already available from the previous step
+        railway up \
+          --service diamond-frontend \
+          --environment production \
           --detach
 
     - name: 🌐 Get Deployment URL
@@ -297,6 +316,17 @@ jobs:
 
         echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "🌐 Deployment URL: $DEPLOYMENT_URL"
+
+    - name: 🌐 Get Frontend URL
+      id: get-frontend-url
+      run: |
+        DEPLOYMENT_URL=$(railway domain \
+          --service diamond-frontend \
+          --environment production \
+          2>/dev/null | tail -n1)
+
+        echo "FRONTEND_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "🌐 Frontend URL: $DEPLOYMENT_URL"
     
     - name: 🧪 Test Production Deployment
       run: |
@@ -330,6 +360,7 @@ jobs:
         echo "- ✅ **Health Check**: Production endpoints verified" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🌐 **Live URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- 🌐 **Frontend URL**: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🎉 **Production deployment completed successfully!**" >> $GITHUB_STEP_SUMMARY
     
@@ -339,4 +370,4 @@ jobs:
         echo "🌐 Application is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
         echo "📦 Docker images available at:"
         echo "   - Backend: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest"
-        echo "   - Frontend: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest" 
+        echo "   - Frontend Live: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}"
