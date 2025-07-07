@@ -168,9 +168,13 @@ jobs:
       run: |
         echo "🧪 Testing production images..."
         
+        # Create Docker network for container communication
+        echo "🔗 Creating Docker network..."
+        docker network create test-network
+        
         # Test backend image
         echo "🔍 Testing backend container..."
-        docker run -d --name test-backend -p 5001:5000 \
+        docker run -d --name test-backend --network test-network -p 5001:5000 \
           -e DAGSHUB_USERNAME=${{ env.DAGSHUB_USERNAME }} \
           -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
           -e MLFLOW_TRACKING_USERNAME=${{ env.DAGSHUB_USERNAME }} \
@@ -179,7 +183,7 @@ jobs:
         
         # Test frontend image
         echo "🔍 Testing frontend container..."
-        docker run -d --name test-frontend -p 8080:80 \
+        docker run -d --name test-frontend --network test-network -p 8080:80 \
           ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
         
         # Wait for containers to start
@@ -234,10 +238,11 @@ jobs:
         
         echo "✅ Production images tested successfully!"
         
-        # Cleanup test containers
-        echo "🧹 Cleaning up test containers..."
+        # Cleanup test containers and network
+        echo "🧹 Cleaning up test containers and network..."
         docker stop test-backend test-frontend || true
         docker rm test-backend test-frontend || true
+        docker network rm test-network || true
     
     - name: 🔐 Login to Docker Hub
       uses: docker/login-action@v3
