@@ -289,21 +289,22 @@ jobs:
         export PATH=$PATH:~/.railway/bin
 
         # Deploy the latest backend image to the production environment.
-        # The project is inferred from the RAILWAY_TOKEN secret.
+        export RAILWAY_SERVICE_NAME="diamond-backend"
+        export RAILWAY_DEPLOY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }}"
+        
         railway up \
-          --service diamond-backend \
           --environment production \
-          --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }} \
           --detach
 
     - name: 🚂 Deploy Frontend to Railway
       run: |
         echo "🚂 Deploying Frontend..."
         # Railway CLI is already available from the previous step
+        export RAILWAY_SERVICE_NAME="diamond-frontend"
+        export RAILWAY_DEPLOY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }}"
+        
         railway up \
-          --service diamond-frontend \
           --environment production \
-          --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }} \
           --detach
 
     - name: 🌐 Get Deployment URL
