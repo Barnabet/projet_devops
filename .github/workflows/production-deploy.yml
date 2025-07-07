@@ -142,9 +142,9 @@ jobs:
     - name: 🏷️ Generate Docker Image Tag
       run: echo "IMAGE_TAG=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
     
-    - name: 🏗️ Build Production Docker Images
+    - name: 🏗️ Prepare Application for Deployment
       run: |
-        echo "🏗️ Building production Docker images with latest model..."
+        echo "🏗️ Preparing application for deployment..."
         
         # Copy model artifacts to backend if they exist
         if [ -d "model_artifacts" ]; then
@@ -157,20 +157,16 @@ jobs:
           echo "✅ Model info copied to backend"
         fi
         
-        # Build images with production tags
-        docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }} \
-                     -f backend/Dockerfile .
+        # Build and test images locally for verification
+        echo "🧪 Building images for local testing..."
+        docker build -t diamond-backend-test -f backend/Dockerfile .
+        docker build -t diamond-frontend-test -f frontend/Dockerfile frontend/
         
-        docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }} \
-                     -f frontend/Dockerfile frontend/
-        
-        echo "✅ Docker images built successfully!"
+        echo "✅ Application prepared for deployment!"
     
-    - name: 🧪 Test Production Images
+    - name: 🧪 Test Application Locally
       run: |
-        echo "🧪 Testing production images..."
+        echo "🧪 Testing application locally..."
         
         # Create Docker network for container communication
         echo "🔗 Creating Docker network..."
@@ -183,12 +179,12 @@ jobs:
           -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
           -e MLFLOW_TRACKING_USERNAME=${{ env.DAGSHUB_USERNAME }} \
           -e MLFLOW_TRACKING_PASSWORD=${{ env.DAGSHUB_TOKEN }} \
-          ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
+          diamond-backend-test
         
         # Test frontend image
         echo "🔍 Testing frontend container..."
         docker run -d --name test-frontend --network test-network -p 8080:80 \
-          ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
+          diamond-frontend-test
         
         # Wait for containers to start
         echo "⏳ Waiting for containers to start..."
@@ -240,7 +236,7 @@ jobs:
           exit 1
         fi
         
-        echo "✅ Production images tested successfully!"
+        echo "✅ Application tested successfully!"
         
         # Cleanup test containers and network
         echo "🧹 Cleaning up test containers and network..."
@@ -248,45 +244,32 @@ jobs:
         docker rm test-backend test-frontend || true
         docker network rm test-network || true
     
-    - name: 🔐 Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.DOCKER_REGISTRY }}
-        username: ${{ env.DOCKER_USERNAME }}
-        password: ${{ env.DOCKER_PASSWORD }}
-    
-    - name: 📤 Push Images to Docker Hub
+    - name: 🚂 Install Railway CLI
       run: |
-        echo "📤 Pushing images to Docker Hub..."
-        
-        # Push backend images
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }}
-        
-        # Push frontend images
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }}
-        
-        echo "✅ Images pushed to Docker Hub successfully!"
-    
-    - name: 🚂 Deploy to Railway
-      run: |
-        echo "🚂 Deploying to Railway CI..."
-        # Install Railway CLI
+        echo "📦 Installing Railway CLI..."
         curl -fsSL https://railway.app/install.sh | sh
         export PATH=$PATH:~/.railway/bin
-
-        # Deploy the latest backend image to the production environment.
-        # The project is inferred from the RAILWAY_TOKEN secret.
+        echo "$HOME/.railway/bin" >> $GITHUB_PATH
+    
+    - name: 🚂 Deploy Backend to Railway
+      env:
+        RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
+      run: |
+        echo "🚂 Deploying Backend to Railway..."
+        
+        # Deploy backend service from source (Railway will build using Dockerfile)
         railway up \
           --service diamond-backend \
           --environment production \
           --detach
 
-    - name: 🚂 Deploy Frontend to Railway
+    - name: 🚂 Deploy Frontend to Railway  
+      env:
+        RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
       run: |
-        echo "🚂 Deploying Frontend..."
-        # Railway CLI is already available from the previous step
+        echo "🚂 Deploying Frontend to Railway..."
+        
+        # Deploy frontend service from source (Railway will build using Dockerfile)
         railway up \
           --service diamond-frontend \
           --environment production \
@@ -344,19 +327,18 @@ jobs:
       run: |
         echo "## 🚀 Production Deployment Report" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ **Model**: Latest from MLflow Production stage" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ **Docker Images**: Built and pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ **Deployment**: Successfully deployed to Railway" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Application**: Built and tested locally" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Deployment**: Successfully deployed to Railway from source" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ **Health Check**: Production endpoints verified" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "🌐 **Live URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
-        echo "- 🌐 **Frontend URL**: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Backend URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Frontend URL**: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🎉 **Production deployment completed successfully!**" >> $GITHUB_STEP_SUMMARY
     
     - name: 📢 Notify Deployment Success
       run: |
         echo "🎉 Production deployment completed!"
-        echo "🌐 Application is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
-        echo "📦 Docker images available at:"
-        echo "   - Backend: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest"
-        echo "   - Frontend Live: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}"
+        echo "🌐 Backend is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
+        echo "🌐 Frontend is live at: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}"
+        echo "🚂 Railway deployment method: Build from source"
