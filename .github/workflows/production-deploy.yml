@@ -277,10 +277,12 @@ jobs:
         curl -fsSL https://railway.app/install.sh | sh
         export PATH=$PATH:~/.railway/bin
         
-        # The CLI will automatically use the RAILWAY_TOKEN from the environment
+        # Link the directory to the Railway project
+        railway link ${{ env.RAILWAY_PROJECT_ID }}
         
-        # Deploy using Railway, specifying the project ID
-        railway up --detach --project ${{ env.RAILWAY_PROJECT_ID }}
+        # Deploy using the linked project.
+        # The CLI automatically uses the RAILWAY_TOKEN from the environment.
+        railway up --detach
         
         echo "✅ Deployed to Railway successfully!"
     
