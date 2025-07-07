@@ -269,6 +269,25 @@ jobs:
         
         echo "✅ Images pushed to Docker Hub successfully!"
     
+    - name: ⚙️ Ensure Railway service exists
+      run: |
+        echo "⚙️ Ensuring Railway service diamond-backend exists..."
+        
+        # Install Railway CLI
+        curl -fsSL https://railway.app/install.sh | sh
+        export PATH=$PATH:~/.railway/bin
+        
+        # Check if the service is already present; create it if not (idempotent)
+        if railway service list --project ${{ env.RAILWAY_PROJECT_ID }} --json \
+            | jq -e '.services[] | select(.name=="diamond-backend")' > /dev/null; then
+          echo "✅ Service diamond-backend already exists"
+        else
+          echo "➕ Creating service diamond-backend..."
+          railway add --project ${{ env.RAILWAY_PROJECT_ID }} \
+                      --environment production \
+                      --service diamond-backend \
+                      --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
+        fi
     - name: 🚂 Deploy to Railway
       run: |
         echo "🚂 Deploying to Railway..."
@@ -277,12 +296,11 @@ jobs:
         curl -fsSL https://railway.app/install.sh | sh
         export PATH=$PATH:~/.railway/bin
         
-        # Link the directory to the Railway project
-        railway link ${{ env.RAILWAY_PROJECT_ID }}
+        # Link to the project non‑interactively
+        railway link --project ${{ env.RAILWAY_PROJECT_ID }} --environment production
         
-        # Deploy using the linked project.
-        # The CLI automatically uses the RAILWAY_TOKEN from the environment.
-        railway up --detach
+        # Deploy the backend service without any interactive prompts
+        railway up --service diamond-backend --detach
         
         echo "✅ Deployed to Railway successfully!"
     
