@@ -116,10 +116,10 @@ jobs:
     
     - name: 🔍 Run Security Scan
       run: |
-        pip install safety bandit
+        pip install pip-audit bandit
         
         echo "🔍 Scanning dependencies for vulnerabilities..."
-        cd backend && safety scan -r requirements.txt --continue-on-error || echo "⚠️ Security vulnerabilities found"
+        cd backend && pip-audit -r requirements.txt --format=text || echo "⚠️ Security vulnerabilities found"
         
         echo "🔍 Scanning code for security issues..."
         bandit -r backend/ -f json || echo "⚠️ Security issues found"
