@@ -61,7 +61,6 @@ jobs:
         import os
         import mlflow
         import dagshub
-        import json
         from pathlib import Path
         
         # Set DagsHub credentials from environment variables
@@ -102,13 +101,6 @@ jobs:
                 print(f"⬇️ Downloading model to {local_path}...")
                 mlflow.artifacts.download_artifacts(artifact_uri=model_path, dst_path=local_path)
                 
-                # Download model metadata (training columns)
-                run_id = latest_version.run_id
-                meta_path = "./model_meta"
-                os.makedirs(meta_path, exist_ok=True)
-                print(f"⬇️ Downloading model metadata from run {run_id} to {meta_path}...")
-                client.download_artifacts(run_id, "model_meta", meta_path)
-                
                 # Create model info file
                 model_info = {
                     "model_name": model_name,
@@ -119,6 +111,7 @@ jobs:
                     "download_path": local_path
                 }
                 
+                import json
                 with open("model_info.json", "w") as f:
                     json.dump(model_info, f, indent=2)
                 
@@ -157,11 +150,6 @@ jobs:
         if [ -d "model_artifacts" ]; then
           cp -r model_artifacts backend/
           echo "✅ Model artifacts copied to backend"
-        fi
-        
-        if [ -d "model_meta" ]; then
-          cp -r model_meta backend/
-          echo "✅ Model metadata copied to backend"
         fi
         
         if [ -f "model_info.json" ]; then
@@ -289,10 +277,9 @@ jobs:
         export PATH=$PATH:~/.railway/bin
 
         # Deploy the latest backend image to the production environment.
-        export RAILWAY_SERVICE_NAME="diamond-backend"
-        export RAILWAY_DEPLOY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }}"
-        
+        # The project is inferred from the RAILWAY_TOKEN secret.
         railway up \
+          --service diamond-backend \
           --environment production \
           --detach
 
@@ -300,10 +287,8 @@ jobs:
       run: |
         echo "🚂 Deploying Frontend..."
         # Railway CLI is already available from the previous step
-        export RAILWAY_SERVICE_NAME="diamond-frontend"
-        export RAILWAY_DEPLOY_IMAGE="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }}"
-        
         railway up \
+          --service diamond-frontend \
           --environment production \
           --detach
 

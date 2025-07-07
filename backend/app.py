@@ -18,32 +18,10 @@ MODEL_NAME = 'diamond-price-regressor'
 model = None
 training_columns = None
 
-# Define local paths for bundled artifacts
-LOCAL_MODEL_PATH = "model_artifacts"
-LOCAL_COLUMNS_PATH = "model_meta/training_columns.json"
-
 def load_model():
-    """Load model and training columns, prioritizing local paths."""
+    """Load the latest model and training columns from MLflow."""
     global model, training_columns
     
-    # Try loading from local paths first (for production container)
-    if os.path.exists(LOCAL_MODEL_PATH) and os.path.exists(LOCAL_COLUMNS_PATH):
-        try:
-            print(f"✅ Found local model artifacts. Loading from {LOCAL_MODEL_PATH}...")
-            model = mlflow.sklearn.load_model(LOCAL_MODEL_PATH)
-            
-            with open(LOCAL_COLUMNS_PATH, 'r') as f:
-                training_columns = json.load(f)
-            
-            print("✅ Model and training columns loaded successfully from local artifacts.")
-            print(f"Ready to serve predictions! Model loaded with {len(training_columns)} features.")
-            return # Exit after successful local load
-            
-        except Exception as e:
-            print(f"⚠️ Error loading local model: {e}. Falling back to MLflow download.")
-
-    # Fallback to MLflow download if local loading fails or paths don't exist
-    print("🔄 Local model not found. Attempting to download from DagsHub MLflow...")
     try:
         print("🔄 Initializing DagsHub...")
         
@@ -116,7 +94,7 @@ def predict():
     """Receive prediction data, preprocess, and return prediction."""
     if model is None or training_columns is None:
         return jsonify({
-            "error": "Model not loaded. Check server logs for details. If running in production, the model may not have been bundled correctly in the Docker image."
+            "error": "Model not loaded. Please ensure the model is registered in MLflow and promoted to Production stage in DagsHub."
         }), 500
 
     try:
