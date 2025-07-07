@@ -282,13 +282,18 @@ jobs:
           --service diamond-backend \
           --environment production \
           --detach
-    
+
     - name: 🌐 Get Deployment URL
       id: get-url
       run: |
-        # Get Railway deployment URL
-        railway status
-        DEPLOYMENT_URL=$(railway status --json | jq -r '.deployments[0].url' 2>/dev/null || echo "https://your-app.railway.app")
+        # Fetch public URL for the backend service
+        # `railway domain` will return the service's existing domain or generate one if missing.
+        # We parse the single‑line output directly—no need for JSON or prior `railway link`.
+        DEPLOYMENT_URL=$(railway domain \
+          --service diamond-backend \
+          --environment production \
+          2>/dev/null | tail -n1)
+
         echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "🌐 Deployment URL: $DEPLOYMENT_URL"
     
