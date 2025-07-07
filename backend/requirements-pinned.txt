@@ -28,6 +28,7 @@ charset-normalizer==3.3.2
 click==8.1.7
 gitpython==3.1.40
 importlib-metadata==7.0.1
+zipp==3.17.0
 
 # Pydantic and type dependencies
 pydantic==2.5.2
