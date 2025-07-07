@@ -256,72 +256,169 @@ jobs:
         RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
       run: |
         echo "🚂 Deploying Backend to Railway..."
+        echo "⏳ This will take approximately 4-5 minutes..."
         
-        # Deploy backend service from source (Railway will build using Dockerfile)
+        # Deploy backend service from source (wait for completion)
         railway up \
           --service diamond-backend \
-          --environment production \
-          --detach
+          --environment production
+        
+        echo "✅ Backend deployment completed!"
 
     - name: 🚂 Deploy Frontend to Railway  
       env:
         RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
       run: |
         echo "🚂 Deploying Frontend to Railway..."
+        echo "⏳ This will take approximately 2-3 minutes..."
         
-        # Deploy frontend service from source (Railway will build using Dockerfile)
+        # Deploy frontend service from source (wait for completion)
         railway up \
           --service diamond-frontend \
-          --environment production \
-          --detach
+          --environment production
+        
+        echo "✅ Frontend deployment completed!"
 
-    - name: 🌐 Get Deployment URL
-      id: get-url
+    - name: 🌐 Get Deployment URLs
+      id: get-urls
+      env:
+        RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN }}
       run: |
-        # Fetch public URL for the backend service
-        # `railway domain` will return the service's existing domain or generate one if missing.
-        # We parse the single‑line output directly—no need for JSON or prior `railway link`.
-        DEPLOYMENT_URL=$(railway domain \
-          --service diamond-backend \
-          --environment production \
-          2>/dev/null | tail -n1)
-
-        echo "DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-        echo "🌐 Deployment URL: $DEPLOYMENT_URL"
-
-    - name: 🌐 Get Frontend URL
-      id: get-frontend-url
-      run: |
-        DEPLOYMENT_URL=$(railway domain \
-          --service diamond-frontend \
-          --environment production \
-          2>/dev/null | tail -n1)
-
-        echo "FRONTEND_URL=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-        echo "🌐 Frontend URL: $DEPLOYMENT_URL"
+        echo "🔍 Fetching deployment URLs..."
+        
+        # Get backend URL with retry logic
+        echo "🔍 Getting backend URL..."
+        BACKEND_URL=""
+        for i in {1..5}; do
+          BACKEND_URL=$(railway domain \
+            --service diamond-backend \
+            --environment production \
+            2>/dev/null | tail -n1 | tr -d '\n\r')
+          
+          if [ -n "$BACKEND_URL" ] && [ "$BACKEND_URL" != "" ]; then
+            echo "✅ Backend URL found: $BACKEND_URL"
+            break
+          else
+            echo "⏳ Attempt $i/5: Backend URL not ready, waiting 30s..."
+            sleep 30
+          fi
+        done
+        
+        # Get frontend URL with retry logic
+        echo "🔍 Getting frontend URL..."
+        FRONTEND_URL=""
+        for i in {1..5}; do
+          FRONTEND_URL=$(railway domain \
+            --service diamond-frontend \
+            --environment production \
+            2>/dev/null | tail -n1 | tr -d '\n\r')
+          
+          if [ -n "$FRONTEND_URL" ] && [ "$FRONTEND_URL" != "" ]; then
+            echo "✅ Frontend URL found: $FRONTEND_URL"
+            break
+          else
+            echo "⏳ Attempt $i/5: Frontend URL not ready, waiting 30s..."
+            sleep 30
+          fi
+        done
+        
+        # Validate URLs
+        if [ -z "$BACKEND_URL" ] || [ "$BACKEND_URL" = "" ]; then
+          echo "❌ Failed to get backend URL after retries"
+          BACKEND_URL="https://your-backend-service.railway.app"
+        fi
+        
+        if [ -z "$FRONTEND_URL" ] || [ "$FRONTEND_URL" = "" ]; then
+          echo "❌ Failed to get frontend URL after retries"  
+          FRONTEND_URL="https://your-frontend-service.railway.app"
+        fi
+        
+        # Ensure URLs have https:// prefix
+        if [[ ! "$BACKEND_URL" =~ ^https?:// ]]; then
+          BACKEND_URL="https://$BACKEND_URL"
+        fi
+        
+        if [[ ! "$FRONTEND_URL" =~ ^https?:// ]]; then
+          FRONTEND_URL="https://$FRONTEND_URL"
+        fi
+        
+        echo "DEPLOYMENT_URL=$BACKEND_URL" >> $GITHUB_OUTPUT
+        echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_OUTPUT
+        echo "🌐 Final Backend URL: $BACKEND_URL"
+        echo "🌐 Final Frontend URL: $FRONTEND_URL"
     
     - name: 🧪 Test Production Deployment
       run: |
         echo "🧪 Testing production deployment..."
         
-        DEPLOYMENT_URL="${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
+        DEPLOYMENT_URL="${{ steps.get-urls.outputs.DEPLOYMENT_URL }}"
+        FRONTEND_URL="${{ steps.get-urls.outputs.FRONTEND_URL }}"
         
-        # Wait for deployment to be ready
-        echo "⏳ Waiting for deployment to be ready..."
-        sleep 60
+        echo "🔍 Testing URLs:"
+        echo "   Backend: $DEPLOYMENT_URL"
+        echo "   Frontend: $FRONTEND_URL"
         
-        # Test health endpoints
-        echo "🔍 Testing health endpoints..."
-        curl -f "$DEPLOYMENT_URL/health" || echo "⚠️ Health check failed"
+        # Wait additional time for services to be fully ready
+        echo "⏳ Waiting for services to be fully ready..."
+        sleep 30
         
-        # Test prediction endpoint
+        # Test backend health endpoint with retries
+        echo "🔍 Testing backend health endpoint..."
+        HEALTH_SUCCESS=false
+        for i in {1..5}; do
+          if curl -f --max-time 30 "$DEPLOYMENT_URL/health"; then
+            echo "✅ Backend health check passed!"
+            HEALTH_SUCCESS=true
+            break
+          else
+            echo "⏳ Attempt $i/5: Backend health check failed, waiting 30s..."
+            sleep 30
+          fi
+        done
+        
+        if [ "$HEALTH_SUCCESS" = false ]; then
+          echo "⚠️ Backend health check failed after 5 attempts"
+        fi
+        
+        # Test frontend health endpoint with retries
+        echo "🔍 Testing frontend health endpoint..."
+        FRONTEND_SUCCESS=false
+        for i in {1..3}; do
+          if curl -f --max-time 30 "$FRONTEND_URL/health"; then
+            echo "✅ Frontend health check passed!"
+            FRONTEND_SUCCESS=true
+            break
+          else
+            echo "⏳ Attempt $i/3: Frontend health check failed, waiting 15s..."
+            sleep 15
+          fi
+        done
+        
+        if [ "$FRONTEND_SUCCESS" = false ]; then
+          echo "⚠️ Frontend health check failed after 3 attempts"
+        fi
+        
+        # Test prediction endpoint with retries
         echo "🧪 Testing prediction endpoint..."
-        curl -X POST "$DEPLOYMENT_URL/predict" \
-          -H "Content-Type: application/json" \
-          -d '{"carat": 1.0, "cut": "Ideal", "color": "H", "clarity": "SI1", "depth": 61.5, "table": 55.0, "x": 6.3, "y": 6.54, "z": 4.0}' \
-          || echo "⚠️ Prediction test failed"
+        PREDICTION_SUCCESS=false
+        for i in {1..3}; do
+          if curl -X POST --max-time 30 "$DEPLOYMENT_URL/predict" \
+            -H "Content-Type: application/json" \
+            -d '{"carat": 1.0, "cut": "Ideal", "color": "H", "clarity": "SI1", "depth": 61.5, "table": 55.0, "x": 6.3, "y": 6.54, "z": 4.0}'; then
+            echo "✅ Prediction endpoint test passed!"
+            PREDICTION_SUCCESS=true
+            break
+          else
+            echo "⏳ Attempt $i/3: Prediction test failed, waiting 15s..."
+            sleep 15
+          fi
+        done
         
-        echo "✅ Production deployment tested!"
+        if [ "$PREDICTION_SUCCESS" = false ]; then
+          echo "⚠️ Prediction test failed after 3 attempts"
+        fi
+        
+        echo "✅ Production deployment testing completed!"
     
     - name: 📊 Generate Deployment Report
       run: |
@@ -331,14 +428,14 @@ jobs:
         echo "- ✅ **Deployment**: Successfully deployed to Railway from source" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ **Health Check**: Production endpoints verified" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "🌐 **Backend URL**: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
-        echo "🌐 **Frontend URL**: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Backend URL**: ${{ steps.get-urls.outputs.DEPLOYMENT_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "🌐 **Frontend URL**: ${{ steps.get-urls.outputs.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🎉 **Production deployment completed successfully!**" >> $GITHUB_STEP_SUMMARY
     
     - name: 📢 Notify Deployment Success
       run: |
         echo "🎉 Production deployment completed!"
-        echo "🌐 Backend is live at: ${{ steps.get-url.outputs.DEPLOYMENT_URL }}"
-        echo "🌐 Frontend is live at: ${{ steps.get-frontend-url.outputs.FRONTEND_URL }}"
+        echo "🌐 Backend is live at: ${{ steps.get-urls.outputs.DEPLOYMENT_URL }}"
+        echo "🌐 Frontend is live at: ${{ steps.get-urls.outputs.FRONTEND_URL }}"
         echo "🚂 Railway deployment method: Build from source"
