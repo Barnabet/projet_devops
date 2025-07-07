@@ -174,7 +174,7 @@ jobs:
         
         # Test backend image
         echo "🔍 Testing backend container..."
-        docker run -d --name test-backend --network test-network -p 5001:5000 \
+        docker run -d --name test-backend --network test-network --network-alias backend -p 5001:5000 \
           -e DAGSHUB_USERNAME=${{ env.DAGSHUB_USERNAME }} \
           -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
           -e MLFLOW_TRACKING_USERNAME=${{ env.DAGSHUB_USERNAME }} \

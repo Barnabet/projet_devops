@@ -37,11 +37,11 @@ def test_backend_container():
     
     # Run the backend container
     print("🚀 Starting backend container...")
-    run_cmd = """docker run -d --name test-backend --network test-network -p 5001:5000 \
-        -e DAGSHUB_USERNAME=test \
-        -e DAGSHUB_TOKEN=test \
-        -e MLFLOW_TRACKING_USERNAME=test \
-        -e MLFLOW_TRACKING_PASSWORD=test \
+    run_cmd = """docker run -d --name test-backend --network test-network --network-alias backend -p 5001:5000 \\
+        -e DAGSHUB_USERNAME=test \\
+        -e DAGSHUB_TOKEN=test \\
+        -e MLFLOW_TRACKING_USERNAME=test \\
+        -e MLFLOW_TRACKING_PASSWORD=test \\
         test-backend"""
     
     code, stdout, stderr = run_command(run_cmd)
