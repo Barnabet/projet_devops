@@ -61,6 +61,7 @@ jobs:
         import os
         import mlflow
         import dagshub
+        import json
         from pathlib import Path
         
         # Set DagsHub credentials from environment variables
@@ -104,6 +105,7 @@ jobs:
                 # Download model metadata (training columns)
                 run_id = latest_version.run_id
                 meta_path = "./model_meta"
+                os.makedirs(meta_path, exist_ok=True)
                 print(f"⬇️ Downloading model metadata from run {run_id} to {meta_path}...")
                 client.download_artifacts(run_id, "model_meta", meta_path)
                 
@@ -117,7 +119,6 @@ jobs:
                     "download_path": local_path
                 }
                 
-                import json
                 with open("model_info.json", "w") as f:
                     json.dump(model_info, f, indent=2)
                 
