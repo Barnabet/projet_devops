@@ -138,6 +138,9 @@ jobs:
           cat model_info.json
         fi
     
+    - name: 🏷️ Generate Docker Image Tag
+      run: echo "IMAGE_TAG=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
+    
     - name: 🏗️ Build Production Docker Images
       run: |
         echo "🏗️ Building production Docker images with latest model..."
@@ -155,11 +158,11 @@ jobs:
         
         # Build images with production tags
         docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:$(date +%Y%m%d-%H%M%S) \
+                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }} \
                      -f backend/Dockerfile .
         
         docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest \
-                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:$(date +%Y%m%d-%H%M%S) \
+                     -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }} \
                      -f frontend/Dockerfile frontend/
         
         echo "✅ Docker images built successfully!"
@@ -257,15 +260,15 @@ jobs:
         
         # Push backend images
         docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:$(date +%Y%m%d-%H%M%S)
+        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }}
         
         # Push frontend images
         docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:latest
-        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:$(date +%Y%m%d-%H%M%S)
+        docker push ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }}
         
         echo "✅ Images pushed to Docker Hub successfully!"
     
-    - name: 🚂 Deploy to Railway
+    - name: �� Deploy to Railway
       run: |
         echo "🚂 Deploying to Railway..."
         
