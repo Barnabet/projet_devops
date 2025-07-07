@@ -293,6 +293,7 @@ jobs:
         railway up \
           --service diamond-backend \
           --environment production \
+          --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-backend:${{ env.IMAGE_TAG }} \
           --detach
 
     - name: 🚂 Deploy Frontend to Railway
@@ -302,6 +303,7 @@ jobs:
         railway up \
           --service diamond-frontend \
           --environment production \
+          --image ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_USERNAME }}/diamond-frontend:${{ env.IMAGE_TAG }} \
           --detach
 
     - name: 🌐 Get Deployment URL
