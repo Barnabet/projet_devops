@@ -495,8 +495,8 @@ class TestDataPersistenceAndConsistency:
                 assert 'model_status' in data
                 assert 'message' in data
                 
-                # Status should always be 'running'
-                assert data['status'] == 'running'
+                # Status should always be 'healthy'
+                assert data['status'] == 'healthy'
                 
                 # Model status should be consistent
                 assert data['model_status'] in ['loaded', 'not loaded']
