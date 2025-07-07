@@ -37,7 +37,7 @@ def test_backend_container():
     
     # Run the backend container
     print("🚀 Starting backend container...")
-    run_cmd = """docker run -d --name test-backend -p 5001:5000 \
+    run_cmd = """docker run -d --name test-backend --network test-network -p 5001:5000 \
         -e DAGSHUB_USERNAME=test \
         -e DAGSHUB_TOKEN=test \
         -e MLFLOW_TRACKING_USERNAME=test \
@@ -132,7 +132,7 @@ def test_frontend_container():
     
     # Run the frontend container
     print("🚀 Starting frontend container...")
-    run_cmd = "docker run -d --name test-frontend -p 8080:80 test-frontend"
+    run_cmd = "docker run -d --name test-frontend --network test-network -p 8080:80 test-frontend"
     
     code, stdout, stderr = run_command(run_cmd)
     
@@ -178,15 +178,59 @@ def test_frontend_container():
     
     return True
 
+def test_integration():
+    """Test frontend-backend integration through nginx proxy"""
+    print("🔍 Testing frontend-backend integration...")
+    
+    # Test that frontend can proxy requests to backend
+    try:
+        print("🔍 Testing frontend proxy to backend...")
+        test_data = {
+            "carat": 1.0,
+            "cut": "Ideal",
+            "color": "H",
+            "clarity": "SI1",
+            "depth": 61.5,
+            "table": 55.0,
+            "x": 6.3,
+            "y": 6.54,
+            "z": 4.0
+        }
+        # This should be proxied to the backend through nginx
+        response = requests.post("http://localhost:8080/api/predict", 
+                               json=test_data, 
+                               timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Frontend-backend integration working! Result: {result}")
+            return True
+        else:
+            print(f"⚠️ Frontend-backend integration returned {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ Frontend-backend integration test failed: {e}")
+    
+    return False
+
+def setup_network():
+    """Set up Docker network for testing"""
+    print("🔗 Setting up Docker network...")
+    
+    # Create network if it doesn't exist
+    create_network_cmd = "docker network create test-network 2>/dev/null || true"
+    run_command(create_network_cmd)
+    
+    print("✅ Docker network ready")
+
 def cleanup():
-    """Clean up test containers"""
-    print("🧹 Cleaning up test containers...")
+    """Clean up test containers and network"""
+    print("🧹 Cleaning up test containers and network...")
     
     # Stop and remove containers
     cleanup_cmds = [
         "docker stop test-backend test-frontend 2>/dev/null || true",
         "docker rm test-backend test-frontend 2>/dev/null || true",
-        "docker rmi test-backend test-frontend 2>/dev/null || true"
+        "docker rmi test-backend test-frontend 2>/dev/null || true",
+        "docker network rm test-network 2>/dev/null || true"
     ]
     
     for cmd in cleanup_cmds:
@@ -202,6 +246,11 @@ def main():
     success = True
     
     try:
+        # Set up Docker network
+        setup_network()
+        
+        print()
+        
         # Test backend
         if not test_backend_container():
             success = False
@@ -211,6 +260,13 @@ def main():
         # Test frontend
         if not test_frontend_container():
             success = False
+        
+        print()
+        
+        # Test integration (only if both containers are running)
+        if success:
+            if not test_integration():
+                success = False
         
         print()
         print("=" * 50)
