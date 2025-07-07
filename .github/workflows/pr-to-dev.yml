@@ -119,7 +119,7 @@ jobs:
         pip install safety bandit
         
         echo "🔍 Scanning dependencies for vulnerabilities..."
-        cd backend && safety check -r requirements.txt || echo "⚠️ Security vulnerabilities found"
+        cd backend && safety scan -r requirements.txt --continue-on-error || echo "⚠️ Security vulnerabilities found"
         
         echo "🔍 Scanning code for security issues..."
         bandit -r backend/ -f json || echo "⚠️ Security issues found"

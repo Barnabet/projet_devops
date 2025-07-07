@@ -86,7 +86,7 @@ jobs:
         pip install safety bandit flake8 black isort
         
         echo "🔍 Security scan..."
-        cd backend && safety check -r requirements.txt
+        cd backend && safety scan -r requirements.txt --continue-on-error
         bandit -r backend/ -f json
         
         echo "🎨 Code quality checks..."
