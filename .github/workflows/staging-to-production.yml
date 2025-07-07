@@ -86,7 +86,7 @@ jobs:
         pip install pip-audit bandit flake8 black isort
         
         echo "🔍 Security scan..."
-        cd backend && pip-audit -r requirements.txt --format=text || echo "⚠️ Security vulnerabilities found in dependencies"
+        pip-audit -r backend/requirements.txt --format table || echo "⚠️ Security vulnerabilities found in dependencies"
         bandit -r backend/ -f json
         
         echo "🎨 Code quality checks..."

@@ -119,7 +119,7 @@ jobs:
         pip install pip-audit bandit
         
         echo "🔍 Scanning dependencies for vulnerabilities..."
-        cd backend && pip-audit -r requirements.txt --format=text || echo "⚠️ Security vulnerabilities found"
+        pip-audit -r backend/requirements.txt --format table || echo "⚠️ Security vulnerabilities found"
         
         echo "🔍 Scanning code for security issues..."
         bandit -r backend/ -f json || echo "⚠️ Security issues found"
