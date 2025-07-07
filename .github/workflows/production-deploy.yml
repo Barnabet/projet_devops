@@ -174,7 +174,7 @@ jobs:
         
         # Test backend image
         echo "🔍 Testing backend container..."
-        docker run -d --name test-backend --network test-network --network-alias backend -p 5001:5000 \
+        docker run -d --name test-backend --network test-network --network-alias backend -p 5000:5000 \
           -e DAGSHUB_USERNAME=${{ env.DAGSHUB_USERNAME }} \
           -e DAGSHUB_TOKEN=${{ env.DAGSHUB_TOKEN }} \
           -e MLFLOW_TRACKING_USERNAME=${{ env.DAGSHUB_USERNAME }} \
@@ -202,7 +202,7 @@ jobs:
           
           # Quick health check (with timeout)
           echo "🔍 Testing backend health..."
-          if timeout 10 curl -f http://localhost:5001/health; then
+          if timeout 10 curl -f http://localhost:5000/health; then
             echo "✅ Backend health check passed!"
           else
             echo "⚠️ Backend health check failed, but container is running"

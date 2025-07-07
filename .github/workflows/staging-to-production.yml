@@ -68,12 +68,12 @@ jobs:
         sleep 45
         
         echo "🔍 Running container health checks..."
-        curl -f http://localhost:5001/health || exit 1
+        curl -f http://localhost:5000/health || exit 1
         curl -f http://localhost:8080/health || exit 1
         
         echo "🧪 Running API tests..."
         # Test prediction endpoint (should handle gracefully even without model)
-        curl -X POST http://localhost:5001/predict \
+        curl -X POST http://localhost:5000/predict \
           -H "Content-Type: application/json" \
           -d '{"carat": 1.0, "cut": "Ideal", "color": "H", "clarity": "SI1", "depth": 61.5, "table": 55.0, "x": 6.3, "y": 6.54, "z": 4.0}' \
           || exit 1
